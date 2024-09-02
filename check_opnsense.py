@@ -142,6 +142,8 @@ class CheckOPNsense:
             self.check_updates()
         elif self.options.mode == "services":
             self.check_services()
+        elif self.options.mode == "system":
+            self.check_system()
         else:
             message = "Check mode '{}' not known".format(self.options.mode)
             self.output(CheckState.UNKNOWN, message)
@@ -187,7 +189,7 @@ class CheckOPNsense:
         check_opts = p.add_argument_group("Check Options")
 
         check_opts.add_argument(
-            "-m", "--mode", choices=("updates", "services"), required=True, help="Mode to use."
+            "-m", "--mode", choices=("updates", "services", "system"), required=True, help="Mode to use."
         )
         check_opts.add_argument(
             "-w",
@@ -227,6 +229,26 @@ class CheckOPNsense:
                 self.check_result = CheckState.CRITICAL
         else:
             self.check_message = "System up to date"
+
+    def check_system(self) -> None:
+        """Check opnsense services."""
+        url = self.get_url("core/system/status")
+        data = self.request(url)
+
+        status = {
+          'OK': CheckState.OK,
+          'Notice': CheckState.OK,
+          'Warning': CheckState.WARNING,
+          'Error': CheckState.CRITICAL,
+        }
+        self.check_message = status[data["System"]["status"]]
+        if data["System"]["status"] != "OK":
+            self.check_message = ", ".join(
+                sec['message'] for sec in data.values()
+                if 'message' in sec and sec['status'] != 'OK'
+            )
+        else:
+            self.check_message = "No problems were detected."
 
     def check_services(self) -> None:
         """Check opnsense services."""
