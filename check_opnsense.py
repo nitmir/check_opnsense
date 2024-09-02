@@ -140,6 +140,8 @@ class CheckOPNsense:
 
         if self.options.mode == "updates":
             self.check_updates()
+        elif self.options.mode == "services":
+            self.check_services()
         else:
             message = "Check mode '{}' not known".format(self.options.mode)
             self.output(CheckState.UNKNOWN, message)
@@ -185,7 +187,7 @@ class CheckOPNsense:
         check_opts = p.add_argument_group("Check Options")
 
         check_opts.add_argument(
-            "-m", "--mode", choices=("updates",), required=True, help="Mode to use."
+            "-m", "--mode", choices=("updates", "services"), required=True, help="Mode to use."
         )
         check_opts.add_argument(
             "-w",
@@ -225,6 +227,31 @@ class CheckOPNsense:
                 self.check_result = CheckState.CRITICAL
         else:
             self.check_message = "System up to date"
+
+    def check_services(self) -> None:
+        """Check opnsense services."""
+        url = self.get_url("core/service/search")
+        data = self.request(url)
+
+        running = []
+        not_running = []
+
+        for row in data["rows"]:
+            if row["running"] == 1:
+                running.append(row["name"])
+            else:
+                not_running.append(row["name"])
+
+        if len(running) + len(not_running) != data["total"]:
+            raise RuntimeError()
+
+        self.perfdata.append(f"'running'={len(running)};;;0;{data['total']}")
+
+        if not_running:
+            self.check_result = CheckState.WARNING
+            self.check_message = "Services not running: {', '.join(not_running)}"
+        else:
+            self.check_message = "All services are running"
 
     def __init__(self) -> None:
         self.options = {}
